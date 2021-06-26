@@ -8,19 +8,36 @@ import { api } from '../services/api';
 import { Loading } from '../components/Loading';
 import { Error } from '../components/Error';
 
+interface Card {
+  title: string;
+  description: string;
+  url: string;
+  ts: number;
+  id: string;
+}
+
+type fetchImagesResponse = {
+  data: Card[];
+  after: string | null;
+}
+
 export default function Home(): JSX.Element {
-  const fetchImages = async ({ pageParam = null }) => await fetch(`/api/images?after=${pageParam}`)
+  async function fetchImages({
+    pageParam = null,
+  }): Promise<fetchImagesResponse> {
+    if (pageParam) {
+      const { data } = await api.get(`/api/images`, {
+        params: {
+          after: pageParam,
+        },
+      });
 
-  function buttonText() {
-    if(isFetchingNextPage) {
-      return "Carregando..."
+      return data;
     }
-
-    if (fetchNextPage) {
-      return "Carregar mais"
-    }
+    const { data } = await api.get(`/api/images`);
+    return data;
   }
-  
+
   const {
     data,
     isLoading,
@@ -30,12 +47,19 @@ export default function Home(): JSX.Element {
     hasNextPage,
   } = useInfiniteQuery(
     'images', fetchImages, {
-      getNextPageParam: (lastPage) => lastPage || null, 
+      getNextPageParam: lastPage => lastPage.after ?? null, 
     });
 
   const formattedData = useMemo(() => {
     // TODO FORMAT AND FLAT DATA ARRAY
-    data.pages.map(item => [item])
+    let formattedDataTotal = [] as Card[];
+    const dataPages = data?.pages;
+
+    dataPages?.map(page => {
+      formattedDataTotal = [...formattedDataTotal, ...page.data];
+      return;
+    })
+    return formattedDataTotal;
   }, [data]);
 
   if (isLoading) {
@@ -51,9 +75,17 @@ export default function Home(): JSX.Element {
       <Header />
 
       <Box maxW={1120} px={20} mx="auto" my={20}>
-        <CardList cards={formattedData} />
-        {/* TODO RENDER LOAD MORE BUTTON IF DATA HAS NEXT PAGE */}
-        {hasNextPage  &&  <Button>{buttonText()}</Button>}
+        <CardList cards={formattedData}/>
+        {hasNextPage && (
+          <Button
+            marginTop="1rem"
+            onClick={() => fetchNextPage()}
+            role="button"
+            width={[ '100%', 'auto' ]}
+          >
+            {isFetchingNextPage ? 'Carregando...' : 'Carregar mais'}
+          </Button>
+        )}
       </Box>
     </>
   );
